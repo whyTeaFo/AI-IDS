@@ -1,0 +1,6 @@
+﻿留出类,模型,被误判为,样本数,占该类比例(%)
+Bot,XGBoost,BENIGN,391,100.0
+WebAttack,XGBoost,BENIGN,260,60.61
+WebAttack,XGBoost,DoS,151,35.2
+WebAttack,XGBoost,PortScan,18,4.2
+Infiltration,XGBoost,BENIGN,7,100.0

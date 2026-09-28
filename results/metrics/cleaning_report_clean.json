@@ -1,0 +1,26 @@
+{
+  "行数": "3119345 → 2573698",
+  "列数": "85 → 77",
+  "标签映射成功": 2830743,
+  "无穷值替换": 4376,
+  "缺失值删除行数": 1358,
+  "重复行删除": 255687,
+  "常量列删除": [
+    "Bwd PSH Flags",
+    "Bwd URG Flags",
+    "Fwd Avg Bytes/Bulk",
+    "Fwd Avg Packets/Bulk",
+    "Fwd Avg Bulk Rate",
+    "Bwd Avg Bytes/Bulk",
+    "Bwd Avg Packets/Bulk",
+    "Bwd Avg Bulk Rate"
+  ],
+  "非特征列剔除": [
+    "Flow ID",
+    "Source IP",
+    "Destination IP",
+    "Timestamp",
+    "Source Port"
+  ],
+  "不平衡比": 59662.2
+}

@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-IDS 网络入侵检测系统</title>
+<!-- ECharts 本地引入而非 CDN：答辩现场断网也能正常显示 -->
+<script src="/static/vendor/echarts.min.js"></script>
+<style>
+:root {
+  --bg:        #0f1419;
+  --panel:     #1a2028;
+  --panel-2:   #232b36;
+  --border:    #2d3844;
+  --text:      #e6edf3;
+  --text-dim:  #8b98a5;
+  --accent:    #3b82f6;
+  --critical:  #dc2626;
+  --high:      #f97316;
+  --medium:    #f59e0b;
+  --low:       #3b82f6;
+  --info:      #6b7280;
+  --benign:    #22c55e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Microsoft YaHei", "Source Han Sans CN", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 16px;
+}
+
+/* ---------- 顶栏 ---------- */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 20px; margin-bottom: 16px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand h1 { font-size: 19px; font-weight: 600; letter-spacing: .3px; }
+.brand .sub { font-size: 12px; color: var(--text-dim); font-weight: 400; }
+.logo {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  display: grid; place-items: center; font-size: 17px;
+}
+.header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.status { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--info);
+  animation: pulse 2s infinite;
+}
+.dot.ok    { background: var(--benign); }
+.dot.error { background: var(--critical); }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+
+/* ---------- 控件 ---------- */
+select, button, input[type=file] {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 12px; font-size: 13px; cursor: pointer;
+  font-family: inherit;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { background: #2f74e0; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- KPI 卡片 ---------- */
+.kpis {
+  display: grid; gap: 14px; margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.kpi {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 18px;
+  border-left: 3px solid var(--border);
+}
+.kpi.flows     { border-left-color: var(--accent); }
+.kpi.attacks   { border-left-color: var(--critical); }
+.kpi.alerts    { border-left-color: var(--high); }
+.kpi.ratio     { border-left-color: var(--medium); }
+.kpi .label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.kpi .value { font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .foot  { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+/* ---------- 图表网格 ---------- */
+.grid {
+  display: grid; gap: 16px; margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 18px;
+}
+.card h2 {
+  font-size: 14px; font-weight: 600; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.chart { width: 100%; height: 280px; }
+.chart.tall { height: 330px; }
+
+/* ---------- 上传区 ---------- */
+.upload {
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 20px; text-align: center; transition: .18s;
+  margin-bottom: 16px; background: var(--panel);
+}
+.upload:hover, .upload.drag { border-color: var(--accent); background: var(--panel-2); }
+.upload p { color: var(--text-dim); font-size: 13px; margin-bottom: 10px; }
+
+/* ---------- 告警表 ---------- */
+.table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; padding: 9px 10px; font-weight: 500;
+  color: var(--text-dim); font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--panel); z-index: 1;
+}
+td { padding: 9px 10px; border-bottom: 1px solid rgba(45,56,68,.5); }
+tbody tr:hover { background: var(--panel-2); }
+tbody tr.acked { opacity: .42; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.badge.critical { background: rgba(220,38,38,.18);  color: #f87171; }
+.badge.high     { background: rgba(249,115,22,.18); color: #fb923c; }
+.badge.medium   { background: rgba(245,158,11,.18); color: #fbbf24; }
+.badge.low      { background: rgba(59,130,246,.18); color: #60a5fa; }
+.badge.info     { background: rgba(107,114,128,.18);color: #9ca3af; }
+.badge.attack   { background: rgba(220,38,38,.15);  color: #f87171; }
+.badge.benign   { background: rgba(34,197,94,.15);  color: #4ade80; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+
+.empty { text-align: center; color: var(--text-dim); padding: 36px 0; font-size: 13px; }
+.hint  { font-size: 12px; color: var(--text-dim); }
+.toast {
+  position: fixed; bottom: 22px; right: 22px; z-index: 99;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 13px 18px; font-size: 13px;
+  max-width: 420px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  opacity: 0; transform: translateY(12px); transition: .22s;
+  pointer-events: none;
+}
+.toast.show  { opacity: 1; transform: translateY(0); }
+.toast.error { border-left-color: var(--critical); }
+.toast.ok    { border-left-color: var(--benign); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">🛡</div>
+    <div>
+      <h1>AI-IDS 网络入侵检测系统</h1>
+      <div class="sub" id="modelInfo">正在加载模型信息…</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">连接中…</span>
+    </div>
+    <select id="windowSelect" title="统计时间窗">
+      <option value="60">最近 1 小时</option>
+      <option value="360">最近 6 小时</option>
+      <option value="1440" selected>最近 24 小时</option>
+      <option value="10080">最近 7 天</option>
+    </select>
+    <select id="sevSelect" title="最低告警级别">
+      <option value="">全部级别</option>
+      <option value="medium">中及以上</option>
+      <option value="high">高及以上</option>
+      <option value="critical">仅严重</option>
+    </select>
+    <button id="refreshBtn">刷新</button>
+    <button id="resetBtn">清空数据</button>
+  </div>
+</header>
+
+<!-- 上传 -->
+<div class="upload" id="dropZone">
+  <p>拖拽 CICIDS2017 格式的 CSV 到此处，或点击选择文件进行批量检测</p>
+  <input type="file" id="fileInput" accept=".csv,.txt" hidden>
+  <button class="primary" id="pickBtn">选择 CSV 文件</button>
+  <div class="hint" id="uploadHint" style="margin-top:10px"></div>
+</div>
+
+<!-- KPI -->
+<div class="kpis">
+  <div class="kpi flows">
+    <div class="label">检测流量总数</div>
+    <div class="value" id="kpiFlows">–</div>
+    <div class="foot" id="kpiFlowsFoot">统计窗口内</div>
+  </div>
+  <div class="kpi attacks">
+    <div class="label">识别出的攻击</div>
+    <div class="value" id="kpiAttacks">–</div>
+    <div class="foot" id="kpiAttacksFoot">&nbsp;</div>
+  </div>
+  <div class="kpi alerts">
+    <div class="label">产生告警</div>
+    <div class="value" id="kpiAlerts">–</div>
+    <div class="foot" id="kpiAlertsFoot">&nbsp;</div>
+  </div>
+  <div class="kpi ratio">
+    <div class="label">攻击占比</div>
+    <div class="value" id="kpiRatio">–</div>
+    <div class="foot" id="kpiRatioFoot">模型平均置信度 –</div>
+  </div>
+</div>
+
+<!-- 图表 -->
+<div class="grid">
+  <div class="card">
+    <h2>攻击类型分布</h2>
+    <div class="chart" id="chartTypes"></div>
+  </div>
+  <div class="card">
+    <h2>流量趋势</h2>
+    <div class="chart" id="chartTimeline"></div>
+  </div>
+  <div class="card">
+    <h2>攻击源 Top 10</h2>
+    <div class="chart" id="chartAttackers"></div>
+  </div>
+  <div class="card">
+    <h2>模型信息</h2>
+    <div class="chart" id="chartModel" style="height:280px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- 告警表 -->
+<div class="card" style="margin-bottom:16px">
+  <h2>
+    <span>实时告警</span>
+    <span class="hint" id="alertCount"></span>
+  </h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:150px">时间</th>
+          <th style="width:80px">级别</th>
+          <th style="width:110px">攻击类型</th>
+          <th style="width:70px">置信度</th>
+          <th style="width:140px">攻击源 IP</th>
+          <th style="width:150px">目标</th>
+          <th>说明与处置建议</th>
+          <th style="width:70px">操作</th>
+        </tr>
+      </thead>
+      <tbody id="alertBody">
+        <tr><td colspan="8" class="empty">暂无告警。上传一份 CSV 开始检测。</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 检测记录 -->
+<div class="card">
+  <h2>
+    <span>最近检测记录</span>
+    <span class="hint">仅显示最近 100 条</span>
+  </h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:150px">时间</th>
+          <th style="width:140px">源 IP</th>
+          <th style="width:150px">目标</th>
+          <th style="width:110px">判定</th>
+          <th style="width:70px">置信度</th>
+          <th>模型</th>
+        </tr>
+      </thead>
+      <tbody id="flowBody">
+        <tr><td colspan="6" class="empty">暂无检测记录</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+// =============================================================================
+// 全局状态
+// =============================================================================
+const state = {
+  window: 1440,
+  severity: "",
+  charts: {},
+  refreshTimer: null,
+  modelTask: "multiclass",
+};
+
+const SEV_CN = { critical: "严重", high: "高", medium: "中", low: "低", info: "信息" };
+
+// =============================================================================
+// 工具函数
+// =============================================================================
+function $(id) { return document.getElementById(id); }
+
+function toast(msg, kind) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show " + (kind || "");
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = "toast"; }, kind === "error" ? 7000 : 4200);
+}
+
+function fmtNum(n) {
+  if (n === null || n === undefined) return "–";
+  return Number(n).toLocaleString("zh-CN");
+}
+
+function fmtTime(iso) {
+  if (!iso) return "–";
+  // 后端存的是 UTC ISO，转成本地时间显示
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const p = (x) => String(x).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  const text = await res.text();
+  let data;
+  try { data = text ? JSON.parse(text) : {}; }
+  catch (e) { throw new Error(`服务返回了非 JSON 响应（HTTP ${res.status}）`); }
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+// ECharts 通用配置：暗色主题 + 中文字体，避免每个图重复写
+function chartBase(extra) {
+  return Object.assign({
+    textStyle: { fontFamily: '"PingFang SC","Microsoft YaHei","Source Han Sans CN",sans-serif' },
+    grid: { left: 12, right: 20, top: 30, bottom: 12, containLabel: true },
+    tooltip: {
+      backgroundColor: "#232b36", borderColor: "#2d3844",
+      textStyle: { color: "#e6edf3", fontSize: 12 },
+    },
+  }, extra || {});
+}
+
+function initChart(id) {
+  if (state.charts[id]) return state.charts[id];
+  const chart = echarts.init($(id), null, { renderer: "canvas" });
+  state.charts[id] = chart;
+  return chart;
+}
+
+// =============================================================================
+// 数据加载
+// =============================================================================
+async function loadHealth() {
+  try {
+    const h = await api("/api/health");
+    const dot = $("statusDot"), txt = $("statusText");
+    if (h.status === "ok") {
+      dot.className = "dot ok";
+      txt.textContent = `服务正常 · ${h.available_models} 个模型`;
+    } else {
+      dot.className = "dot error";
+      txt.textContent = "未找到已训练模型";
+      toast("服务已启动，但没有可用的模型。请先运行：python -m aiids.models.train_baseline --all", "error");
+    }
+    return h.status === "ok";
+  } catch (e) {
+    $("statusDot").className = "dot error";
+    $("statusText").textContent = "无法连接后端";
+    toast("无法连接后端服务：" + e.message, "error");
+    return false;
+  }
+}
+
+async function loadModelInfo() {
+  try {
+    const m = await api("/api/model");
+    state.modelTask = m.task;
+    $("modelInfo").textContent =
+      `${m.name} · ${m.task_cn} · ${m.classes.length} 个类别 · ${m.n_features} 维特征`;
+
+    // 模型卡片：展示训练指标，答辩时这块最能说明模型质量
+    const metrics = m.metrics || {};
+    const keys = [
+      ["accuracy", "准确率"], ["f1", "F1 (二分类)"], ["f1_macro", "F1 (macro)"],
+      ["recall", "召回率"], ["precision", "精确率"], ["mcc", "MCC"],
+      ["false_positive_rate", "假阳性率"], ["roc_auc", "ROC-AUC"],
+    ];
+    let html = `<div style="font-size:13px;line-height:2">`;
+    html += `<div style="margin-bottom:8px"><span class="hint">模型文件</span><br>
+             <span class="mono" style="font-size:11px">${m.path.split("/").pop()}</span></div>`;
+    html += `<table style="font-size:12.5px">`;
+    for (const [k, label] of keys) {
+      if (metrics[k] === undefined) continue;
+      const v = Number(metrics[k]);
+      // 假阳性率越小越好，用不同颜色提示方向
+      const good = (k === "false_positive_rate") ? v < 0.01 : v > 0.9;
+      html += `<tr><td style="color:var(--text-dim);padding:3px 0">${label}</td>
+               <td style="text-align:right;font-variant-numeric:tabular-nums;
+                          color:${good ? "var(--benign)" : "var(--text)"};
+                          padding:3px 0">${v.toFixed(4)}</td></tr>`;
+    }
+    html += `</table>`;
+    html += `<div style="margin-top:10px" class="hint">类别：${m.classes.join("、")}</div>`;
+    html += `</div>`;
+    $("chartModel").innerHTML = html;
+  } catch (e) {
+    $("modelInfo").textContent = "模型信息不可用";
+    $("chartModel").innerHTML =
+      `<div class="empty">${e.message}</div>`;
+  }
+}
+
+async function loadStats() {
+  try {
+    const s = await api(`/api/stats?window_minutes=${state.window}`);
+    $("kpiFlows").textContent = fmtNum(s.total_flows);
+    $("kpiFlowsFoot").textContent = `正常 ${fmtNum(s.benign)} 条`;
+    $("kpiAttacks").textContent = fmtNum(s.attacks);
+    $("kpiAttacksFoot").textContent = `占比 ${(s.attack_ratio * 100).toFixed(2)}%`;
+    $("kpiAlerts").textContent = fmtNum(s.alerts);
+    // 被抑制的告警必须显示出来，否则用户会以为告警凭空变少了
+    $("kpiAlertsFoot").textContent = s.suppressed_alerts
+      ? `另有 ${fmtNum(s.suppressed_alerts)} 条已去重抑制`
+      : `已确认 ${fmtNum(s.alerts_acknowledged)} 条`;
+    $("kpiRatio").textContent = (s.attack_ratio * 100).toFixed(2) + "%";
+    $("kpiRatioFoot").textContent = `模型平均置信度 ${(s.avg_confidence * 100).toFixed(1)}%`;
+  } catch (e) {
+    toast("加载统计失败：" + e.message, "error");
+  }
+}
+
+async function loadAttackTypes() {
+  const chart = initChart("chartTypes");
+  try {
+    const { distribution } = await api(`/api/attack-types?window_minutes=${state.window}`);
+    if (!distribution || !distribution.length) {
+      chart.clear();
+      chart.setOption(chartBase({
+        title: { text: "暂无攻击数据", left: "center", top: "middle",
+                 textStyle: { color: "#8b98a5", fontSize: 13, fontWeight: "normal" } },
+      }));
+      return;
+    }
+    // 升序排列，ECharts 的横向条形图从下往上画，这样最大值在顶部
+    const data = distribution.slice().sort((a, b) => a.count - b.count);
+    chart.setOption(chartBase({
+      tooltip: {
+        trigger: "axis", axisPointer: { type: "shadow" },
+        backgroundColor: "#232b36", borderColor: "#2d3844",
+        textStyle: { color: "#e6edf3", fontSize: 12 },
+        formatter: (p) => {
+          const d = data[p[0].dataIndex];
+          return `<b>${d.attack_type}</b><br/>流数：${fmtNum(d.count)}<br/>` +
+                 `平均置信度：${(d.avg_confidence * 100).toFixed(1)}%`;
+        },
+      },
+      grid: { left: 12, right: 60, top: 16, bottom: 12, containLabel: true },
+      xAxis: { type: "value", axisLabel: { color: "#8b98a5" },
+               splitLine: { lineStyle: { color: "#2d3844", type: "dashed" } } },
+      yAxis: { type: "category", data: data.map(d => d.attack_type),
+               axisLabel: { color: "#e6edf3", fontSize: 11 },
+               axisLine: { lineStyle: { color: "#2d3844" } } },
+      series: [{
+        type: "bar",
+        data: data.map(d => d.count),
+        itemStyle: { color: "#dc2626", borderRadius: [0, 3, 3, 0] },
+        barMaxWidth: 22,
+        label: { show: true, position: "right", color: "#8b98a5", fontSize: 11,
+                 formatter: (p) => fmtNum(p.value) },
+      }],
+    }), true);
+  } catch (e) { /* 静默：单个图表失败不应打断整个页面刷新 */ }
+}
+
+async function loadTimeline() {
+  const chart = initChart("chartTimeline");
+  try {
+    const { timeline } = await api(
+      `/api/timeline?window_minutes=${state.window}&buckets=24`);
+    if (!timeline || !timeline.length) {
+      chart.clear();
+      chart.setOption(chartBase({
+        title: { text: "暂无流量数据", left: "center", top: "middle",
+                 textStyle: { color: "#8b98a5", fontSize: 13, fontWeight: "normal" } },
+      }));
+      return;
+    }
+    chart.setOption(chartBase({
+      tooltip: { trigger: "axis", backgroundColor: "#232b36",
+                 borderColor: "#2d3844", textStyle: { color: "#e6edf3", fontSize: 12 } },
+      legend: { data: ["正常", "攻击"], textStyle: { color: "#8b98a5" },
+                top: 0, right: 0, itemWidth: 12, itemHeight: 8 },
+      xAxis: { type: "category", boundaryGap: false,
+               data: timeline.map(t => fmtTime(t.time).slice(6)),
+               axisLabel: { color: "#8b98a5", fontSize: 10 },
+               axisLine: { lineStyle: { color: "#2d3844" } } },
+      yAxis: { type: "value", axisLabel: { color: "#8b98a5" },
+               splitLine: { lineStyle: { color: "#2d3844", type: "dashed" } } },
+      series: [
+        { name: "正常", type: "line", smooth: true, showSymbol: false,
+          data: timeline.map(t => t.benign),
+          lineStyle: { color: "#22c55e", width: 2 },
+          areaStyle: { color: "rgba(34,197,94,.13)" } },
+        { name: "攻击", type: "line", smooth: true, showSymbol: false,
+          data: timeline.map(t => t.attacks),
+          lineStyle: { color: "#dc2626", width: 2 },
+          areaStyle: { color: "rgba(220,38,38,.18)" } },
+      ],
+    }), true);
+  } catch (e) { /* 忽略 */ }
+}
+
+async function loadTopAttackers() {
+  const chart = initChart("chartAttackers");
+  try {
+    const { attackers } = await api(`/api/top-attackers?window_minutes=${state.window}&limit=10`);
+    if (!attackers || !attackers.length) {
+      chart.clear();
+      chart.setOption(chartBase({
+        title: { text: "暂无攻击源数据", left: "center", top: "middle",
+                 textStyle: { color: "#8b98a5", fontSize: 13, fontWeight: "normal" } },
+      }));
+      return;
+    }
+    const data = attackers.slice().sort((a, b) => a.count - b.count);
+    chart.setOption(chartBase({
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" },
+                 backgroundColor: "#232b36", borderColor: "#2d3844",
+                 textStyle: { color: "#e6edf3", fontSize: 12 },
+                 formatter: (p) => {
+                   const d = data[p[0].dataIndex];
+                   return `<b>${d.src_ip}</b><br/>攻击流数：${fmtNum(d.count)}<br/>` +
+                          `涉及攻击类型：${d.attack_types} 种`;
+                 } },
+      grid: { left: 12, right: 60, top: 16, bottom: 12, containLabel: true },
+      xAxis: { type: "value", axisLabel: { color: "#8b98a5" },
+               splitLine: { lineStyle: { color: "#2d3844", type: "dashed" } } },
+      yAxis: { type: "category", data: data.map(d => d.src_ip),
+               axisLabel: { color: "#e6edf3", fontSize: 11 },
+               axisLine: { lineStyle: { color: "#2d3844" } } },
+      series: [{
+        type: "bar", data: data.map(d => d.count),
+        itemStyle: { color: "#f97316", borderRadius: [0, 3, 3, 0] },
+        barMaxWidth: 20,
+        label: { show: true, position: "right", color: "#8b98a5", fontSize: 11,
+                 formatter: (p) => fmtNum(p.value) },
+      }],
+    }), true);
+  } catch (e) { /* 忽略 */ }
+}
+
+async function loadAlerts() {
+  const body = $("alertBody");
+  try {
+    const q = new URLSearchParams({ limit: "50" });
+    if (state.severity) q.set("severity", state.severity);
+    const { alerts, count } = await api("/api/alerts?" + q);
+
+    $("alertCount").textContent = count ? `${count} 条` : "";
+
+    if (!alerts.length) {
+      body.innerHTML = `<tr><td colspan="8" class="empty">暂无告警。上传一份 CSV 开始检测。</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = alerts.map(a => {
+      const sev = SEV_CN[a.severity] || a.severity;
+      const target = [a.dst_ip, a.dst_port].filter(x => x !== null && x !== undefined).join(":");
+      return `<tr class="${a.acknowledged ? "acked" : ""}">
+        <td class="mono">${fmtTime(a.created_at)}</td>
+        <td><span class="badge ${a.severity}">${sev}</span></td>
+        <td><b>${a.attack_type}</b></td>
+        <td class="mono">${(a.confidence * 100).toFixed(1)}%</td>
+        <td class="mono">${a.src_ip || "–"}</td>
+        <td class="mono">${target || "–"}</td>
+        <td style="font-size:12.5px;color:var(--text-dim)">${a.message || ""}</td>
+        <td>${a.acknowledged
+              ? '<span class="hint">已确认</span>'
+              : `<button onclick="ackAlert(${a.id})" style="padding:3px 9px;font-size:12px">确认</button>`}
+        </td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="8" class="empty">加载失败：${e.message}</td></tr>`;
+  }
+}
+
+async function loadFlows() {
+  const body = $("flowBody");
+  try {
+    const { flows } = await api("/api/flows?limit=100");
+    if (!flows.length) {
+      body.innerHTML = `<tr><td colspan="6" class="empty">暂无检测记录</td></tr>`;
+      return;
+    }
+    body.innerHTML = flows.map(f => {
+      const badge = f.is_attack ? "attack" : "benign";
+      const label = f.is_attack ? f.prediction : "正常";
+      const target = [f.dst_ip, f.dst_port].filter(x => x !== null && x !== undefined).join(":");
+      return `<tr>
+        <td class="mono">${fmtTime(f.created_at)}</td>
+        <td class="mono">${f.src_ip || "–"}</td>
+        <td class="mono">${target || "–"}</td>
+        <td><span class="badge ${badge}">${label}</span></td>
+        <td class="mono">${(f.confidence * 100).toFixed(1)}%</td>
+        <td class="hint">${f.model_name || "–"}</td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">加载失败：${e.message}</td></tr>`;
+  }
+}
+
+async function ackAlert(id) {
+  try {
+    await api(`/api/alerts/${id}/ack`, { method: "POST" });
+    toast("告警已确认", "ok");
+    loadAlerts();
+    loadStats();
+  } catch (e) {
+    toast("确认失败：" + e.message, "error");
+  }
+}
+
+// =============================================================================
+// 上传与检测
+// =============================================================================
+async function uploadFile(file) {
+  if (!file) return;
+
+  const mb = (file.size / 1024 / 1024).toFixed(1);
+  $("uploadHint").textContent = `正在上传 ${file.name}（${mb} MB）并检测…`;
+  $("pickBtn").disabled = true;
+
+  const form = new FormData();
+  form.append("file", file);
+
+  try {
+    const t0 = performance.now();
+    const r = await api("/api/detect/csv?limit=20000&save_to_db=true", {
+      method: "POST", body: form,
+    });
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
+
+    $("uploadHint").textContent =
+      `完成：处理 ${fmtNum(r.total)} 条，检出攻击 ${fmtNum(r.attacks)} 条，` +
+      `生成告警 ${fmtNum(r.alerts)} 条（耗时 ${secs}s）`;
+
+    let msg = `检测完成：${fmtNum(r.total)} 条流量，发现 ${fmtNum(r.attacks)} 条攻击，` +
+              `生成 ${fmtNum(r.alerts)} 条告警`;
+    if (r.suppressed) msg += `，${fmtNum(r.suppressed)} 条因重复被抑制`;
+    if (r.below_threshold) msg += `，${fmtNum(r.below_threshold)} 条置信度不足未告警`;
+    toast(msg, r.attacks > 0 ? "error" : "ok");
+    if (r.inf_note) toast(r.inf_note, "ok");
+    if (r.note) toast(r.note, "error");
+
+    await refreshAll();
+  } catch (e) {
+    $("uploadHint").textContent = "检测失败：" + e.message;
+    toast("检测失败：" + e.message, "error");
+  } finally {
+    $("pickBtn").disabled = false;
+    $("fileInput").value = "";
+  }
+}
+
+// =============================================================================
+// 刷新调度
+// =============================================================================
+async function refreshAll() {
+  await Promise.all([
+    loadStats(), loadAttackTypes(), loadTimeline(),
+    loadTopAttackers(), loadAlerts(), loadFlows(),
+  ]);
+}
+
+function scheduleRefresh() {
+  clearInterval(state.refreshTimer);
+  // 只在窗口可见时轮询，切到后台就停，避免无意义的请求
+  state.refreshTimer = setInterval(() => {
+    if (!document.hidden) refreshAll();
+  }, 15000);
+}
+
+// =============================================================================
+// 事件绑定
+// =============================================================================
+function bindEvents() {
+  $("windowSelect").addEventListener("change", (e) => {
+    state.window = parseInt(e.target.value, 10);
+    refreshAll();
+  });
+  $("sevSelect").addEventListener("change", (e) => {
+    state.severity = e.target.value;
+    loadAlerts();
+  });
+  $("refreshBtn").addEventListener("click", () => {
+    refreshAll();
+    toast("已刷新", "ok");
+  });
+  $("resetBtn").addEventListener("click", async () => {
+    if (!confirm("确定清空所有检测记录与告警？此操作不可撤销。")) return;
+    try {
+      await api("/api/reset", { method: "POST" });
+      toast("数据已清空", "ok");
+      refreshAll();
+    } catch (e) { toast("清空失败：" + e.message, "error"); }
+  });
+
+  $("pickBtn").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", (e) => uploadFile(e.target.files[0]));
+
+  // 拖拽上传
+  const dz = $("dropZone");
+  ["dragenter", "dragover"].forEach(ev =>
+    dz.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dz.classList.add("drag");
+    }));
+  ["dragleave", "drop"].forEach(ev =>
+    dz.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dz.classList.remove("drag");
+    }));
+  dz.addEventListener("drop", (e) => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) uploadFile(f);
+  });
+
+  // 窗口大小变化时重绘图表（ECharts 不会自动响应容器尺寸变化）
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      Object.values(state.charts).forEach(c => c.resize());
+    }, 160);
+  });
+}
+
+// =============================================================================
+// 启动
+// =============================================================================
+(async function init() {
+  bindEvents();
+  const ok = await loadHealth();
+  if (ok) await loadModelInfo();
+  await refreshAll();
+  scheduleRefresh();
+})();
+
+// 暴露给内联 onclick 使用
+window.ackAlert = ackAlert;
+</script>
+</body>
+</html>

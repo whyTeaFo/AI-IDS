@@ -1,0 +1,39 @@
+# AI-IDS —— 运行时依赖
+# 环境已验证：Python 3.14.7 / Linux x86_64
+#
+# 安装：
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+
+# ---- 数据处理 ----
+numpy>=2.1
+pandas>=2.2          # 已在 pandas 3.0.6 上验证
+pyarrow>=18.0        # parquet 中间格式，加速重复读取
+pyyaml>=6.0
+
+# ---- 机器学习 ----
+scikit-learn>=1.5    # 已在 1.9.1 上验证
+xgboost>=2.1         # 已在 3.4.1 上验证
+imbalanced-learn>=0.12   # SMOTE，用于类别不平衡实验
+
+# ---- 可解释性 ----
+shap>=0.46           # 特征重要性研究点
+
+# ---- 可视化 ----
+matplotlib>=3.9
+seaborn>=0.13
+
+# ---- 系统层（第 3、4 周）----
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+python-multipart>=0.0.12   # 文件上传
+jinja2>=3.1
+
+# ---- 流量解析（第 4 周）----
+scapy>=2.6           # pcap 解析 / 攻击流量生成
+# 注：tshark 为系统级依赖，已安装，不走 pip
+
+# ---- 测试与工具 ----
+pytest>=8.3
+tqdm>=4.66

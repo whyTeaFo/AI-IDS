@@ -1,0 +1,22 @@
+{
+  "accuracy": 0.7851086714742556,
+  "balanced_accuracy": 0.16662640654952401,
+  "f1_macro": 0.11389126666882715,
+  "f1_weighted": 0.7155090073937901,
+  "precision_macro": 0.10461699897761007,
+  "recall_macro": 0.12496980491214302,
+  "precision_weighted": 0.6572444690833799,
+  "recall_weighted": 0.7851086714742556,
+  "mcc": 0.2367065315964642,
+  "experiment": "multiclass_time",
+  "model": "MLP",
+  "task": "multiclass",
+  "split_strategy": "time",
+  "n_train": 1374744,
+  "n_test": 1038497,
+  "n_features": 70,
+  "train_time_sec": 111.75,
+  "predict_time_sec": 3.405,
+  "class_weight": "None",
+  "resampler": null
+}

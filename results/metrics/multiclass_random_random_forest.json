@@ -1,0 +1,23 @@
+{
+  "accuracy": 0.9988926448303999,
+  "balanced_accuracy": 0.8931981245687439,
+  "f1_macro": 0.9283796591847261,
+  "f1_weighted": 0.9988585219589028,
+  "precision_macro": 0.985595144460454,
+  "recall_macro": 0.8931981245687439,
+  "precision_weighted": 0.998872965798899,
+  "recall_weighted": 0.9988926448303999,
+  "mcc": 0.996234227307341,
+  "roc_auc_ovr_macro": 0.999959253698462,
+  "experiment": "multiclass_random",
+  "model": "Random Forest",
+  "task": "multiclass",
+  "split_strategy": "random",
+  "n_train": 1853062,
+  "n_test": 514740,
+  "n_features": 70,
+  "train_time_sec": 124.55,
+  "predict_time_sec": 2.039,
+  "class_weight": "None",
+  "resampler": null
+}

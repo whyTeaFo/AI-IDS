@@ -1,0 +1,23 @@
+{
+  "accuracy": 0.9991665695302483,
+  "balanced_accuracy": 0.9328183869670745,
+  "f1_macro": 0.9550289621828356,
+  "f1_weighted": 0.9991573440997057,
+  "precision_macro": 0.9845330916747359,
+  "recall_macro": 0.9328183869670745,
+  "precision_weighted": 0.9991586345858416,
+  "recall_weighted": 0.9991665695302483,
+  "mcc": 0.9971691716489997,
+  "roc_auc_ovr_macro": 0.9993514833396673,
+  "experiment": "fullfeat_multiclass_random",
+  "model": "XGBoost",
+  "task": "multiclass",
+  "split_strategy": "random",
+  "n_train": 1853062,
+  "n_test": 514740,
+  "n_features": 70,
+  "train_time_sec": 160.69,
+  "predict_time_sec": 2.149,
+  "class_weight": "None",
+  "resampler": null
+}

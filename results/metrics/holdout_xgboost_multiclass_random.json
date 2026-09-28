@@ -1,0 +1,115 @@
+{
+  "tag": "xgboost_multiclass_random",
+  "results": [
+    {
+      "holdout_class": "Bot",
+      "model": "xgboost",
+      "task": "multiclass",
+      "n_holdout_test": 391,
+      "detection_rate": 0.0,
+      "baseline_detection_rate": 0.9506119134638462,
+      "misclassified_as": {
+        "BENIGN": 391
+      },
+      "metrics": {
+        "accuracy": 0.9986478610560672,
+        "balanced_accuracy": 0.8378141057229636,
+        "f1_macro": 0.8517148227378589,
+        "f1_weighted": 0.9982688874837834,
+        "precision_macro": 0.8715752821496712,
+        "recall_macro": 0.8378141057229636,
+        "precision_weighted": 0.9978923559320518,
+        "recall_weighted": 0.9986478610560672,
+        "mcc": 0.9954001296821046,
+        "n_classes_in_proba": 7,
+        "n_classes_in_test": 8,
+        "n_unseen_classes": 1,
+        "experiment": "holdout_Bot_multiclass",
+        "model": "XGBoost",
+        "task": "multiclass",
+        "split_strategy": "random",
+        "n_train": 1851656,
+        "n_test": 514740,
+        "n_features": 70,
+        "train_time_sec": 112.59,
+        "predict_time_sec": 1.787,
+        "class_weight": "None",
+        "resampler": null
+      }
+    },
+    {
+      "holdout_class": "WebAttack",
+      "model": "xgboost",
+      "task": "multiclass",
+      "n_holdout_test": 429,
+      "detection_rate": 0.3939393939393939,
+      "baseline_detection_rate": 0.9112365963107733,
+      "misclassified_as": {
+        "BENIGN": 260,
+        "DoS": 151,
+        "PortScan": 18
+      },
+      "metrics": {
+        "accuracy": 0.9983467381590706,
+        "balanced_accuracy": 0.8082971907565168,
+        "f1_macro": 0.8306305862324208,
+        "f1_weighted": 0.9979203669190271,
+        "precision_macro": 0.8605700423110417,
+        "recall_macro": 0.8082971907565168,
+        "precision_weighted": 0.9975074382364923,
+        "recall_weighted": 0.9983467381590706,
+        "mcc": 0.9943768973128807,
+        "n_classes_in_proba": 7,
+        "n_classes_in_test": 8,
+        "n_unseen_classes": 1,
+        "experiment": "holdout_WebAttack_multiclass",
+        "model": "XGBoost",
+        "task": "multiclass",
+        "split_strategy": "random",
+        "n_train": 1851520,
+        "n_test": 514740,
+        "n_features": 70,
+        "train_time_sec": 107.01,
+        "predict_time_sec": 1.748,
+        "class_weight": "None",
+        "resampler": null
+      }
+    },
+    {
+      "holdout_class": "Infiltration",
+      "model": "xgboost",
+      "task": "multiclass",
+      "n_holdout_test": 7,
+      "detection_rate": 0.0,
+      "baseline_detection_rate": 0.9602228343421615,
+      "misclassified_as": {
+        "BENIGN": 7
+      },
+      "metrics": {
+        "accuracy": 0.9991471422465711,
+        "balanced_accuracy": 0.8447192814896097,
+        "f1_macro": 0.8502205656445815,
+        "f1_weighted": 0.9991324320219126,
+        "precision_macro": 0.8567369261669451,
+        "recall_macro": 0.8447192814896097,
+        "precision_weighted": 0.9991256170081139,
+        "recall_weighted": 0.9991471422465711,
+        "mcc": 0.9971033388123961,
+        "n_classes_in_proba": 7,
+        "n_classes_in_test": 8,
+        "n_unseen_classes": 1,
+        "experiment": "holdout_Infiltration_multiclass",
+        "model": "XGBoost",
+        "task": "multiclass",
+        "split_strategy": "random",
+        "n_train": 1853036,
+        "n_test": 514740,
+        "n_features": 70,
+        "train_time_sec": 117.94,
+        "predict_time_sec": 1.954,
+        "class_weight": "None",
+        "resampler": null
+      }
+    }
+  ]
+}

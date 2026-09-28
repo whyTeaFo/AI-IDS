@@ -1,0 +1,168 @@
+# =============================================================================
+# 合成数据配置 —— 仅供冒烟测试
+# =============================================================================
+# 用途：在真实数据（235MB）下载完成前，或改了代码想快速验证时使用。
+#
+#   python scripts/make_synthetic.py --rows 100000
+#   python -m aiids.data.build --config configs/config.synthetic.yaml --figures
+#   python -m aiids.models.train_baseline --config configs/config.synthetic.yaml --all
+#
+# ⚠️ 合成数据的类别分布和特征相关性都是人为构造的，模型在其上能拿到
+#    接近 100% 的分数。这些数字**没有任何意义**，不得写进报告。
+#
+# 与主配置的差异只有三处：数据目录、处理目录、随机种子。
+# 其余全部继承真实配置的实验参数，保证测试覆盖的就是真实流程。
+
+project:
+  name: AI-IDS-SYNTHETIC
+  seed: 42
+
+paths:
+  raw_dir:       data/raw_synthetic
+  processed_dir: data/processed_synthetic   # 独立目录，绝不覆盖真实数据
+  model_dir:     results/synthetic/models
+  figure_dir:    results/synthetic/figures
+  metric_dir:    results/synthetic/metrics
+  log_dir:       logs
+
+data:
+  csv_glob: "**/*_SYNTHETIC.csv"
+  label_col: Label
+
+  drop_cols:
+    - Flow ID
+    - Source IP
+    - Destination IP
+    - Timestamp
+    - Source Port
+
+  keep_for_grouping:
+    - Source IP
+    - Destination IP
+    - Timestamp
+
+  cleaning:
+    drop_duplicates: true
+    drop_constant: true
+    drop_nan_rows: true
+    clip_inf: true
+    inf_clip_quantile: 0.999
+
+  # 与真实配置完全相同的标签映射，这样能验证
+  # 「软连字符 U+00AD 能否被正确清洗」这条逻辑
+  label_map:
+    BENIGN: BENIGN
+    "DoS Hulk": DoS
+    "DoS GoldenEye": DoS
+    "DoS slowloris": DoS
+    "DoS Slowhttptest": DoS
+    DoS: DoS
+    Heartbleed: DoS
+    DDoS: DDoS
+    PortScan: PortScan
+    "FTP-Patator": BruteForce
+    "SSH-Patator": BruteForce
+    Bot: Bot
+    "Web Attack  Brute Force": WebAttack
+    "Web Attack  XSS": WebAttack
+    "Web Attack  Sql Injection": WebAttack
+    Infiltration: Infiltration
+
+  classes:
+    - BENIGN
+    - DoS
+    - DDoS
+    - PortScan
+    - BruteForce
+    - WebAttack
+    - Bot
+    - Infiltration
+
+  min_samples_per_class: 0
+
+split:
+  test_size: 0.2
+  val_size: 0.1
+  stratify: true
+  group_by: Source IP
+
+features:
+  scaler: standard
+
+# 合成数据量小，把模型规模调小让测试跑得快
+models:
+  random_forest:
+    enabled: true
+    n_estimators: 50
+    max_depth: null
+    min_samples_leaf: 1
+    n_jobs: -1
+    class_weight: null
+
+  xgboost:
+    enabled: true
+    n_estimators: 80
+    max_depth: 6
+    learning_rate: 0.15
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
+    tree_method: hist
+    eval_metric: mlogloss
+    early_stopping_rounds: 15
+    n_jobs: -1
+
+  mlp:
+    enabled: true
+    hidden_layer_sizes: [64, 32]
+    activation: relu
+    alpha: 0.0001
+    batch_size: 256
+    learning_rate_init: 0.001
+    max_iter: 50
+    early_stopping: true
+    n_iter_no_change: 5
+
+imbalance:
+  strategies:
+    - none
+    - class_weight
+    - smote
+  smote:
+    k_neighbors: 3          # 合成数据里少数类样本少，k 要小
+    sampling_strategy: not_majority
+
+generalization:
+  holdout_classes:
+    - Bot
+    - WebAttack
+
+explain:
+  shap_sample_size: 300
+  top_k_features: 15
+
+api:
+  host: 127.0.0.1
+  port: 8001
+  db_path: data/aiids_synthetic.db
+  batch_size: 2000
+
+alert:
+  min_confidence: 0.7
+  dedup_window_sec: 60
+  severity:
+    BENIGN: info
+    DoS: high
+    DDoS: critical
+    PortScan: medium
+    BruteForce: high
+    WebAttack: medium
+    Bot: critical
+    Infiltration: critical
+
+flow:
+  interface: any
+  flow_timeout: 15.0
+  activity_timeout: 5.0
+  pcap_dir: data/raw/pcaps
+  max_packets: 0

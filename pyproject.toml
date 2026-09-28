@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiids"
+version = "1.0.0"
+description = "基于机器学习的网络入侵检测与实时告警系统"
+requires-python = ">=3.10"
+readme = "README.md"
+
+# 依赖清单以 requirements.txt 为准，这里不重复声明，
+# 避免两处版本约束打架。安装方式见 README。
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # 行宽由 line-length 控制，长字符串例外
+    "B008",   # 允许函数默认值里调用（如 argparse）
+]

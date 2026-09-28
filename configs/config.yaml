@@ -1,0 +1,269 @@
+# =============================================================================
+# AI-IDS 全局配置
+# =============================================================================
+# 所有实验脚本共用此文件。改配置不用改代码。
+# =============================================================================
+
+project:
+  name: AI-IDS
+  seed: 42                 # 全局随机种子，保证实验可复现
+
+paths:
+  raw_dir:       data/raw
+  processed_dir: data/processed
+  model_dir:     results/models
+  figure_dir:    results/figures
+  metric_dir:    results/metrics
+  log_dir:       logs
+
+# -----------------------------------------------------------------------------
+# 数据
+# -----------------------------------------------------------------------------
+data:
+  # 在 raw_dir 下递归查找 *.csv。
+  #
+  # 必须用 GeneratedLabelledFlows 这一版：官方另有一份 MachineLearningCSV
+  # 是**精简版**，删掉了 Flow ID / Source IP / Source Port / Destination IP /
+  # Timestamp 五列。缺了 Source IP，"按主机分组划分"的数据泄露实验
+  # （研究点④）就完全做不了，告警系统也无法关联到具体攻击主机。
+  #
+  # 不要改成 "**/*.csv" —— 如果 data/raw 下同时存在两个版本，
+  # 会把 16 个 CSV 全读进来，数据重复一倍且难以察觉。
+  csv_glob: "GeneratedLabelledFlows/**/*.csv"
+  label_col: Label
+
+  # 从特征中剔除的列。理由见报告「数据预处理」章节：
+  #   Flow ID        —— 每条流唯一，纯索引，无泛化价值
+  #   Source IP      —— 记忆主机身份而非行为，是数据泄露的主要来源
+  #   Destination IP —— 同上
+  #   Timestamp      —— 原始时间戳会导致模型学到"某时间段=攻击"
+  #   Source Port    —— 客户端临时端口，高基数噪声
+  # 保留 Destination Port：服务端口有真实语义（22=SSH，80=HTTP），
+  # 是 PortScan 类攻击的判别依据，文献中普遍保留。
+  drop_cols:
+    - Flow ID
+    - Source IP
+    - Destination IP
+    - Timestamp
+    - Source Port
+
+  # 这些列在划分/分组实验里仍需要，所以只从特征里剔除，不从 DataFrame 剔除
+  keep_for_grouping:
+    - Source IP
+    - Destination IP
+    - Timestamp
+
+  # 清洗开关
+  cleaning:
+    drop_duplicates: true          # CICIDS2017 含大量完全重复行
+    drop_constant: true            # 剔除方差为 0 的列（如 CWE Flag Count 恒为 0）
+    drop_nan_rows: true            # 特征缺失的行直接丢弃
+    clip_inf: true                 # Flow Bytes/s 等列含 inf，截断而非丢弃
+    inf_clip_quantile: 0.999       # 用该分位数作为 inf 的截断上界
+
+  # 标签归一化：原始标签 -> 统一类别
+  # CICIDS2017 原始标签有 15 种，且存在拼写不一致（如 'Web Attack  Sql Injection'
+  # 含软连字符），此处统一归并为 8 类
+  label_map:
+    BENIGN: BENIGN
+
+    "DoS Hulk": DoS
+    "DoS GoldenEye": DoS
+    "DoS slowloris": DoS
+    "DoS Slowhttptest": DoS
+    DoS: DoS
+    Heartbleed: DoS                # 心跳攻击，归入 DoS 大类
+
+    DDoS: DDoS
+
+    PortScan: PortScan
+
+    "FTP-Patator": BruteForce
+    "SSH-Patator": BruteForce
+
+    Bot: Bot
+
+    "Web Attack  Brute Force": WebAttack
+    "Web Attack  XSS": WebAttack
+    "Web Attack  Sql Injection": WebAttack
+
+    Infiltration: Infiltration
+
+  # 多分类保留的类别（按样本量升序，报告图表用这个顺序）
+  classes:
+    - BENIGN
+    - DoS
+    - DDoS
+    - PortScan
+    - BruteForce
+    - WebAttack
+    - Bot
+    - Infiltration
+
+  # 少数类合并阈值：样本数低于此值的类别并入 ATTACK_OTHER，避免个别类
+  # 样本太少导致分层抽样失败（Infiltration 仅 36 条）
+  min_samples_per_class: 0
+
+# -----------------------------------------------------------------------------
+# 数据划分
+# -----------------------------------------------------------------------------
+split:
+  test_size: 0.2
+  val_size: 0.1            # 从训练集里再切出，用于早停/调参
+  stratify: true
+
+  # 严格划分的切分点（研究点④用）。
+  # 训练期 = 该日期之前，测试期 = 该日期及之后。
+  # 2017-07-06（周四）之前是周一~周三，含 BENIGN/BruteForce/DoS；
+  # 之后是周四~周五，含 BENIGN/WebAttack/Infiltration/Bot/DDoS/PortScan。
+  # 即测试集的 6 个攻击类在训练时一个都没见过。
+  time_cutoff: "2017-07-06"
+
+  # 按主机分组划分用的列。
+  # 注意：实测 CICIDS2017 每一类攻击只来自一台攻击机，按此列分组会把
+  # 整个攻击类推到同一侧，测试集只剩 BENIGN。split_by_group 内置了
+  # 退化检测，触发时会报错。保留此配置是为了：
+  #   1) 论文/报告里说明"为什么这个常规做法在本数据集上不成立"
+  #   2) 换用其他有主机多样性的数据集时可直接复用
+  group_by: Source IP
+
+# -----------------------------------------------------------------------------
+# 特征工程
+# -----------------------------------------------------------------------------
+features:
+  scaler: standard         # standard | minmax | robust | none
+  # 树模型对单调变换不敏感，标准化主要为 MLP 服务；
+  # 但统一走同一条 pipeline 便于对比，代价可忽略
+
+# -----------------------------------------------------------------------------
+# 模型
+# -----------------------------------------------------------------------------
+# 模型超参。这几个数字是**实测调过的**，不是抄的默认值：
+#
+# 在 185 万训练样本上，最初的配置（RF 200 棵不限深度、MLP batch=512
+# max_iter=100）跑一轮完整矩阵需要 3 小时以上，其中 MLP 单个任务
+# 就要 30+ 分钟，而精度并没有相应提升。调整依据：
+#
+#   Random Forest  100 棵树已足够。随机森林的方差随树数下降呈 1/√n，
+#                  200 棵相对 100 棵的收益不到 1%，训练时间却翻倍。
+#                  min_samples_leaf=2 是关键改动：250 万样本下，
+#                  叶子里只有 1 个样本的树必然过拟合，而且树会无限深。
+#                  限制到 2 能大幅压缩树规模，精度基本无损。
+#
+#   MLP            batch_size 512 → 2048。185 万样本 / 512 = 3600 个
+#                  batch/epoch，100 epoch 就是 36 万次参数更新，绝大部分
+#                  梯度方向是冗余的。放大 batch 后每个 epoch 只需 900 步，
+#                  收敛到同样精度所需的 epoch 数反而更少。
+#                  max_iter 100 → 40 配合 early_stopping，实际通常
+#                  在 15~25 轮就停止。
+#
+# 调整后单轮矩阵约 40 分钟，精度变化在报告「实验设置」章节记录。
+models:
+  random_forest:
+    enabled: true
+    n_estimators: 100
+    max_depth: null        # null = 不限制；由 min_samples_leaf 控制规模
+    min_samples_leaf: 2    # 250 万样本下限制叶节点最小样本数，防过拟合
+    n_jobs: -1
+    class_weight: null     # 由 imbalance 实验覆盖
+
+  xgboost:
+    enabled: true
+    n_estimators: 400
+    max_depth: 8
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
+    tree_method: hist      # CPU 上的最优选择
+    eval_metric: mlogloss  # 注意：二分类时会被代码覆盖为 logloss，见 train.py
+    early_stopping_rounds: 30
+    n_jobs: -1
+
+  mlp:
+    enabled: true
+    hidden_layer_sizes: [256, 128]
+    activation: relu
+    alpha: 0.0001          # L2 正则
+    batch_size: 2048       # 大 batch：减少冗余梯度更新
+    learning_rate_init: 0.001
+    max_iter: 40
+    tol: 0.0001
+    early_stopping: true
+    n_iter_no_change: 5
+
+# -----------------------------------------------------------------------------
+# 类别不平衡实验
+# -----------------------------------------------------------------------------
+imbalance:
+  strategies:
+    - none                 # 原始分布，作为对照
+    - class_weight         # 损失加权
+    - smote                # 合成少数类过采样
+  smote:
+    k_neighbors: 5
+    # 采样模式。可选 capped / balanced / not_majority，但后两者在本数据集
+    # 上都会因内存不足而失败：
+    #
+    #   not_majority  把其余 7 个类全部补齐到多数类（BENIGN，约 170 万）
+    #                 的规模 → 总量约 1200 万行 × 70 维 ≈ 3.6GB，
+    #                 再加上 SMOTE 内部对每个少数类做 kNN 搜索，必然 OOM。
+    #   balanced      同上，代码里已直接抛错并说明原因。
+    #
+    #   capped        只把少数类补到 target_count，多数类不动。
+    #                 这是本数据集上唯一可行的方案，也是真实系统的常规做法
+    #                 —— 没有人会为了平衡数据把训练集撑大五倍。
+    sampling_strategy: capped
+    target_count: 50000    # 每个少数类补齐到的样本数
+    max_rows: 3000000      # 重采样后总行数上限，超过即报错而非静默 OOM
+
+# -----------------------------------------------------------------------------
+# 未知攻击泛化实验
+# -----------------------------------------------------------------------------
+generalization:
+  # 依次把每个攻击类整体从训练集移除，测试模型能否把它识别为"异常"
+  holdout_classes:
+    - Bot
+    - WebAttack
+    - Infiltration
+
+# -----------------------------------------------------------------------------
+# 可解释性
+# -----------------------------------------------------------------------------
+explain:
+  shap_sample_size: 2000   # SHAP 计算量大，抽样即可
+  top_k_features: 20
+
+# -----------------------------------------------------------------------------
+# 服务与告警（第 3 周）
+# -----------------------------------------------------------------------------
+api:
+  host: 127.0.0.1
+  port: 8000
+  db_path: data/aiids.db
+  batch_size: 5000         # 批量推理分块大小
+
+alert:
+  # 触发告警的最低置信度；低于此值只记录不告警
+  min_confidence: 0.7
+  # 同一源 IP 在窗口内重复告警的抑制时间（秒）
+  dedup_window_sec: 60
+  severity:
+    BENIGN: info
+    DoS: high
+    DDoS: critical
+    PortScan: medium
+    BruteForce: high
+    WebAttack: medium
+    Bot: critical
+    Infiltration: critical
+
+# -----------------------------------------------------------------------------
+# 流量提取（第 4 周）
+# -----------------------------------------------------------------------------
+flow:
+  interface: any           # 抓包网卡，any = 全部
+  flow_timeout: 15.0       # 流超时（秒），超时后输出并新建
+  activity_timeout: 5.0    # 活跃超时
+  pcap_dir: data/raw/pcaps
+  max_packets: 0           # 0 = 不限，仅调试用
